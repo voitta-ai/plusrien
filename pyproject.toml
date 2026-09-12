@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plusrien"
+version = "0.1.0"
+description = "Production coverage as dead-code identification."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = ["boto3>=1.40"]
+
+[project.urls]
+Homepage = "https://github.com/voitta-ai/plusrien"
+
+[tool.setuptools.packages.find]
+include = ["plusrien*"]
