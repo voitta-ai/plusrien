@@ -110,26 +110,37 @@ def collect(
     probe_end = datetime.now(timezone.utc)
     probe_start = probe_end - timedelta(days=lookback_days)
 
-    seen: dict[str, list[dict]] = {}
+    # One symbol can have MANY dimension sets. A Kubernetes deployment adds
+    # fleet and pod dimensions, so a single route appears once per pod, and
+    # keeping only the last set silently counts one pod and drops the rest.
+    # Collect every set and sum across them.
+    seen: dict[str, list[list[dict]]] = {}
     for metric in _paginate_metrics(client, namespace):
         if metric.get("MetricName") != metric_name:
             continue
         for dim in metric.get("Dimensions", []):
             if dim["Name"] == dimension:
-                seen[dim["Value"]] = metric["Dimensions"]
+                seen.setdefault(dim["Value"], []).append(metric["Dimensions"])
 
     win_start, win_end = None, None
     hits: dict[str, int] = {}
-    for value, dims in seen.items():
-        hits[value] = int(
-            _sum_metric(client, namespace, metric_name, dims, probe_start, probe_end)
-        )
-        first, last = _window_from_datapoints(
-            client, namespace, metric_name, dims, probe_start, probe_end
-        )
-        if first is not None:
-            win_start = first if win_start is None else min(win_start, first)
-            win_end = last if win_end is None else max(win_end, last)
+    for value, dim_sets in seen.items():
+        running = 0
+        for dims in dim_sets:
+            # CloudWatch dimension matching is EXACT. Querying a subset of a
+            # metric's dimensions returns an empty result rather than an error,
+            # which reads as a hard zero and is indistinguishable from dead
+            # code. Always pass back the complete set that list_metrics gave.
+            running += int(
+                _sum_metric(client, namespace, metric_name, dims, probe_start, probe_end)
+            )
+            first, last = _window_from_datapoints(
+                client, namespace, metric_name, dims, probe_start, probe_end
+            )
+            if first is not None:
+                win_start = first if win_start is None else min(win_start, first)
+                win_end = last if win_end is None else max(win_end, last)
+        hits[value] = running
 
     if win_start is None:
         retval: list[Observation] = []

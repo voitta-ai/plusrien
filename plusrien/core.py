@@ -82,9 +82,14 @@ def merge(records: Iterable[Observation]) -> list[Observation]:
     store is therefore an append-only set of snapshots and the answer is a
     reduction over them. No database, no coordination, no mutation.
 
-    Synthetic observations are dropped, not summed. Canaries, health checks
-    and load tests light up paths that real users never reach, and a map that
-    counts them launders dead code as live.
+    Synthetic observations are dropped, not summed. Health checks, load tests
+    and synthetic monitors light up paths that real users never reach, and a
+    map that counts them launders dead code as live.
+
+    A canary fleet is NOT synthetic. It serves real user traffic under a
+    weighted split, so its observations are a genuine sample and dropping them
+    throws away evidence and loosens every bound for no reason. Synthetic means
+    manufactured traffic, not a smaller fleet.
 
     plusrien: denominators are summed across records, which is correct only
     when each record covers a disjoint window. Overlapping collection runs

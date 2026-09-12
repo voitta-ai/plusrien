@@ -22,10 +22,23 @@ were right. Being wrong is the point. A wrong prediction on a question reading
 could not answer is the only thing that demonstrates the method does something
 reading does not.
 
+## Query shape can manufacture a zero
+
+Some backends match queries exactly and return an empty result rather than an
+error when the query is under-specified. CloudWatch does this with dimensions:
+ask for a metric using four of its six dimensions and you get no datapoints, no
+warning, and a reading indistinguishable from dead code.
+
+This is not hypothetical. It happened while building this library. A route was
+probed for a declared-but-suspected-dead status code, the probe returned zero
+over four hundred days, and the finding was nearly recorded. What stopped it
+was the control below reading zero too.
+
 ## Carry a control that must come back live
 
 Include at least one symbol you would bet heavily is alive. If it reads zero,
-the instrument is broken, not the code. Without a control, a systematic
+the instrument is broken, not the code. This is the cheapest safeguard in the
+whole method and it is the one that actually fires. Without a control, a systematic
 collection failure is indistinguishable from a codebase full of dead code, and
 it fails in the direction that gets things deleted.
 
