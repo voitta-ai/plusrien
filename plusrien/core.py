@@ -146,3 +146,49 @@ def silent(rows: Iterable[Observation], min_observations: int = 0) -> list[Obser
         r for r in rows if r.hits == 0 and r.observations >= min_observations
     ]
     return retval
+
+
+def sanity(rows: list[Observation]) -> list[str]:
+    """Cheap checks that catch a wrong denominator before it becomes a finding.
+
+    A denominator is easy to get wrong in ways that produce no error and no
+    obviously silly output, only a bound that is quietly too tight or too
+    loose. Two failures bit this library within a single afternoon, both on
+    real data:
+
+      too small -- hits exceeding the denominator, which is arithmetically
+          impossible and means the enclosing scope was undercounted
+      too large -- one shared denominator attached to several fleets that sit
+          behind the same load balancer, summing to a multiple of the real
+          traffic and halving every ratio
+
+    Neither is detectable by reading the numbers unless you already know what
+    the ratio should be, so check it rather than trusting it.
+    """
+    warnings: list[str] = []
+    by_scope: dict[tuple[str, str, str], list[Observation]] = {}
+    for row in rows:
+        by_scope.setdefault((row.scope_id, row.env, row.unit), []).append(row)
+
+    for (scope, env, unit), group in sorted(by_scope.items()):
+        hits = sum(r.hits for r in group)
+        denominator = max((r.observations for r in group), default=0)
+        label = f"{scope or '(service)'} / {env}"
+        if denominator == 0:
+            if hits > 0:
+                warnings.append(
+                    f"{label}: {hits:,} hits against a zero denominator; no bound is computable"
+                )
+            continue
+        if hits > denominator:
+            warnings.append(
+                f"{label}: hits ({hits:,}) exceed denominator ({denominator:,}); "
+                "the enclosing scope is undercounted and every bound is too loose"
+            )
+        elif unit == "executions" and hits < denominator * 0.5:
+            warnings.append(
+                f"{label}: hits are only {100 * hits / denominator:.0f}% of the denominator; "
+                "check whether one shared denominator was attached to several fleets"
+            )
+    retval = warnings
+    return retval

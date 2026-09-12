@@ -76,40 +76,60 @@ between releases. Fully-qualified names are stable; line numbers are not.
 Branch is tier two, and it earns in on the specific case of a dead conditional
 inside a live function.
 
-## Tiers, cheapest first
+## Tiers, and what each one can never see
 
-- **Tier 0, already paid for.** Signals the service already emits. Feature-flag
-  evaluation counts, metrics carrying an endpoint dimension, access logs. No
-  instrumentation, no deploy, and the history already exists. The rule that
-  falls out: dead-code toggles should be flags, not literals.
+Cheapest first, but the order is not a ranking of value. **Real coverage is the
+product. Everything above it is a proxy that works only by luck of shape.**
+
+- **Tier 0, already paid for.** Signals the service already emits: framework
+  request metrics, feature-flag evaluation counts, access logs. No
+  instrumentation, no deploy, and months of history already sitting there.
+
+  Its ceiling is hard and worth stating before anyone gets excited. Tier 0 sees
+  only what changes an externally observable outcome. A branch shows up if, and
+  only if, someone already tagged a metric that distinguishes it. That means it
+  is blind to a private helper nobody calls, a feature flag that is always
+  false, a null check that never trips, an error path swallowed inside a
+  method, and an unread database column. Most dead code is exactly that shape.
+
 - **Tier 1, cheap.** Class-load liveness on the JVM via Java Flight Recorder,
   or one-line beacons at candidate sites in a browser bundle. Kills whole-file
-  dead code at near-zero overhead.
-- **Tier 2, real coverage.** JaCoCo agent on a fraction of the fleet in
-  `output=tcpserver` mode, dumped on a schedule and merged over a long window.
-- **Tier 3, the point.** The accumulated map as an input a coding agent can
+  dead code at near-zero overhead. Still not coverage: it answers "did this
+  class ever load", not "did this line ever run".
+
+- **Tier 2, real coverage, and the actual point.** A JaCoCo agent on a fraction
+  of the fleet in `output=tcpserver` mode, dumped on a schedule and merged over
+  a long window. This is the only tier that sees every method and branch
+  regardless of whether it surfaces in a response. It requires a deploy and it
+  costs real overhead. Everything else in this list exists to de-risk getting
+  here, not to replace it.
+
+- **Tier 3, the consumer.** The accumulated map as an input a coding agent can
   query per symbol, so it stops treating every line as equally true.
 
 Full statement-level instrumentation in a production browser bundle is a
-non-starter, so this is probably not one technique. It is two that share a
-schema.
+non-starter, so browser and server are two techniques sharing one schema.
 
 ## Status
 
-Two collectors, chosen to be as unlike each other as possible so that the
-schema is tested rather than asserted.
+Two collectors. Neither is tier 2 yet.
 
-- **CloudWatch metrics** with an endpoint or uri dimension. Counting, route
-  granularity, cloud API, no instrumentation and no deploy. Must be seeded
-  with the declared inventory, because a route that never ran has no metric
-  and its absence is otherwise invisible.
-- **JaCoCo XML.** Binary, method granularity, offline file. Needs no seeding,
-  since it enumerates every class it was given.
+- **CloudWatch metrics** (tier 0) with an endpoint or uri dimension. Counting,
+  route granularity, cloud API, no deploy. Must be seeded with the declared
+  inventory, because a route that never ran has no metric and its absence is
+  otherwise invisible.
+- **JaCoCo XML** (tier 2 input). Binary, method granularity, offline file.
+  Needs no seeding, since it enumerates every class it was given. Today it
+  reads reports generated in continuous integration; pointing it at dumps
+  taken from a live process is the same parser and is the next step.
 
-What building the second one taught, which is why it came early: binary
-collectors support no rate bound from a single report, so the denominator has
-to become accumulated observation windows. See `unit` in `core.py` and the unit
-section of [METHOD.md](METHOD.md).
+Building the second one taught the thing the schema needed: binary collectors
+support no rate bound from a single report, so the denominator has to become
+accumulated observation windows. See `unit` in `core.py`.
+
+The tier 0 collector has already found real dead code in two production
+services, which is worth something. It is not evidence that tier 0 is
+sufficient, only that the pipeline around it works.
 
 ## Using it
 

@@ -56,6 +56,24 @@ because the execution data predated a bytecode change. The scope control
 marked those rows inadmissible instead of dead. Without it, the tool's first
 output would have been a confident false positive on its most-exercised code.
 
+## Check the denominator arithmetically
+
+A wrong denominator produces no error and no obviously silly output, only a
+bound that is quietly too tight or too loose. Two failures of this kind
+happened here within one afternoon, both on real production data.
+
+The denominator was too small once, when a symbol's hits were summed across
+several fleets but the denominator came from only one. It was too large once,
+when a single load balancer's request count was attached to both the main and
+canary fleets that sit behind it, doubling the denominator and halving every
+ratio.
+
+Neither is visible by reading the numbers unless you already know what the
+ratio should be. `sanity()` checks both: hits exceeding the denominator is
+arithmetically impossible, and hits far below it usually means one shared
+denominator got attached to several fleets. Run it; the report does
+automatically.
+
 ## State the bound
 
 The rule of three: zero events in n trials puts the 95% upper bound on the true

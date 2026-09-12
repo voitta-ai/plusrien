@@ -1,6 +1,6 @@
 """Render a merged fact table as a human- and agent-readable report."""
 
-from .core import Observation, silent, zero_hit_upper_bound
+from .core import Observation, sanity, silent, zero_hit_upper_bound
 
 
 def render(rows: list[Observation]) -> str:
@@ -32,6 +32,13 @@ def render(rows: list[Observation]) -> str:
             bound = zero_hit_upper_bound(row.observations)
             lines.append(f"  {0:>18}  {row.symbol_id}")
             lines.append(f"  {'':>18}  95% upper bound on true rate: {bound:.2e}")
+
+    problems = sanity(rows)
+    if problems:
+        lines.append("")
+        lines.append("DENOMINATOR WARNINGS (do not trust the bounds above):")
+        for problem in problems:
+            lines.append(f"  {problem}")
 
     lines.append("")
     lines.append(
